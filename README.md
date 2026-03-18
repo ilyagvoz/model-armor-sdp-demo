@@ -2,6 +2,8 @@
 
 Interactive web app demonstrating [Google Cloud Model Armor](https://cloud.google.com/security/products/model-armor) — a GCP service that screens LLM prompts and responses for safety risks including prompt injection, jailbreaks, PII leakage, malicious URLs, and responsible AI violations.
 
+![PII / Sensitive Data scan showing Model Armor blocking a prompt containing personal information, with SDP findings highlighting the detected entities](docs/demo-pii-scan.png)
+
 ## Prerequisites
 
 - Python 3.10+
