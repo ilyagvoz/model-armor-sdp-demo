@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from google import genai
 from google.api_core import exceptions as gcp_exceptions
 from google.cloud import modelarmor_v1 as ma
 from pydantic import BaseModel
@@ -18,6 +19,8 @@ PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "")
 REGION = os.environ.get("GCP_REGION", "us-central1")
 TEMPLATE_ID = os.environ.get("MODEL_ARMOR_TEMPLATE_ID", "demo-template")
 PORT = int(os.environ.get("PORT", "5610"))
+LLM_REGION = os.environ.get("LLM_REGION", "us-central1")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gemini-2.5-flash")
 
 API_ENDPOINT = f"modelarmor.{REGION}.rep.googleapis.com"
 PARENT = f"projects/{PROJECT_ID}/locations/{REGION}"
@@ -35,6 +38,10 @@ def get_client() -> ma.ModelArmorClient:
     return ma.ModelArmorClient(
         client_options={"api_endpoint": API_ENDPOINT}
     )
+
+
+def get_genai_client() -> genai.Client:
+    return genai.Client(vertexai=True, project=PROJECT_ID, location=LLM_REGION)
 
 
 def build_default_template() -> ma.Template:
@@ -107,7 +114,7 @@ def template_to_dict(template: ma.Template) -> dict:
     }
 
 
-def parse_sanitization_result(result: ma.SanitizationResult) -> dict:
+def parse_sanitization_result(result: ma.SanitizationResult, scanned_text: str = "") -> dict:
     # filter_results is a map: {"pi_and_jailbreak": FilterResult, "rai": FilterResult, ...}
     fr_map = result.filter_results
 
@@ -162,6 +169,9 @@ def parse_sanitization_result(result: ma.SanitizationResult) -> dict:
                     {
                         "info_type": f.info_type,
                         "likelihood": ma.SdpFindingLikelihood(f.likelihood).name if f.likelihood else "UNKNOWN",
+                        "quote": scanned_text[f.location.codepoint_range.start:f.location.codepoint_range.end]
+                        if scanned_text and f.location and f.location.codepoint_range and f.location.codepoint_range.end > 0
+                        else None,
                     }
                     for f in (ir.findings or [])
                 ],
@@ -318,7 +328,7 @@ async def sanitize_prompt(req: SanitizeRequest):
             )
         )
         elapsed_ms = round((time.time() - start) * 1000)
-        result = parse_sanitization_result(response.sanitization_result)
+        result = parse_sanitization_result(response.sanitization_result, req.text)
         result["elapsed_ms"] = elapsed_ms
         result["mode"] = "prompt"
         return result
@@ -340,7 +350,7 @@ async def sanitize_response(req: SanitizeRequest):
             )
         )
         elapsed_ms = round((time.time() - start) * 1000)
-        result = parse_sanitization_result(response.sanitization_result)
+        result = parse_sanitization_result(response.sanitization_result, req.text)
         result["elapsed_ms"] = elapsed_ms
         result["mode"] = "response"
         return result
@@ -353,6 +363,92 @@ async def sanitize_response(req: SanitizeRequest):
 @app.get("/api/scenarios")
 async def get_scenarios():
     return SCENARIOS
+
+
+@app.get("/api/llm-config")
+async def llm_config():
+    return {"model": LLM_MODEL, "region": LLM_REGION}
+
+
+@app.post("/api/chat")
+async def chat_pipeline(req: SanitizeRequest):
+    ma_client = get_client()
+    steps = {}
+
+    # Step 1: Scan the user prompt
+    step1_start = time.time()
+    try:
+        prompt_response = ma_client.sanitize_user_prompt(
+            request=ma.SanitizeUserPromptRequest(
+                name=TEMPLATE_NAME,
+                user_prompt_data=ma.DataItem(text=req.text),
+            )
+        )
+        step1_ms = round((time.time() - step1_start) * 1000)
+        prompt_scan = parse_sanitization_result(prompt_response.sanitization_result, req.text)
+        prompt_scan["elapsed_ms"] = step1_ms
+        steps["prompt_scan"] = prompt_scan
+    except gcp_exceptions.NotFound:
+        raise HTTPException(status_code=404, detail="Template not found. Call POST /api/setup first.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prompt scan failed: {e}")
+
+    prompt_blocked = prompt_scan["overall_match"] == "MATCH_FOUND"
+
+    # Step 2: Call Gemini (skip if prompt blocked)
+    if prompt_blocked:
+        steps["llm"] = {"skipped": True, "reason": "Prompt blocked by Model Armor"}
+    else:
+        step2_start = time.time()
+        try:
+            genai_client = get_genai_client()
+            llm_response = genai_client.models.generate_content(
+                model=LLM_MODEL,
+                contents=req.text,
+            )
+            step2_ms = round((time.time() - step2_start) * 1000)
+            llm_text = llm_response.text or ""
+            steps["llm"] = {
+                "skipped": False,
+                "text": llm_text,
+                "model": LLM_MODEL,
+                "elapsed_ms": step2_ms,
+            }
+        except Exception as e:
+            step2_ms = round((time.time() - step2_start) * 1000)
+            steps["llm"] = {
+                "skipped": False,
+                "error": str(e),
+                "model": LLM_MODEL,
+                "elapsed_ms": step2_ms,
+            }
+
+    # Step 3: Scan the LLM response (skip if no output)
+    llm_text = steps["llm"].get("text") if not steps["llm"].get("skipped") else None
+    if not llm_text:
+        steps["response_scan"] = {"skipped": True, "reason": "No LLM output to scan"}
+    else:
+        step3_start = time.time()
+        try:
+            resp_response = ma_client.sanitize_model_response(
+                request=ma.SanitizeModelResponseRequest(
+                    name=TEMPLATE_NAME,
+                    model_response_data=ma.DataItem(text=llm_text),
+                )
+            )
+            step3_ms = round((time.time() - step3_start) * 1000)
+            response_scan = parse_sanitization_result(resp_response.sanitization_result, llm_text)
+            response_scan["elapsed_ms"] = step3_ms
+            steps["response_scan"] = response_scan
+        except Exception as e:
+            step3_ms = round((time.time() - step3_start) * 1000)
+            steps["response_scan"] = {
+                "skipped": False,
+                "error": str(e),
+                "elapsed_ms": step3_ms,
+            }
+
+    return steps
 
 
 if __name__ == "__main__":

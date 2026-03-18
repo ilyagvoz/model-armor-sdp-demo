@@ -14,6 +14,7 @@ Interactive web app demonstrating [Google Cloud Model Armor](https://cloud.googl
 # 1. Enable the required APIs
 gcloud services enable modelarmor.googleapis.com --project=YOUR_PROJECT_ID
 gcloud services enable dlp.googleapis.com --project=YOUR_PROJECT_ID
+gcloud services enable aiplatform.googleapis.com --project=YOUR_PROJECT_ID
 
 # 2. Install dependencies
 python3 -m pip install -r requirements.txt --index-url https://pypi.org/simple/
@@ -31,6 +32,8 @@ cp .env.example .env
 | `GCP_REGION` | Region where Model Armor is enabled | `us-central1` |
 | `MODEL_ARMOR_TEMPLATE_ID` | Template name for the demo | `demo-template` |
 | `PORT` | Server port | `5610` |
+| `LLM_REGION` | Region for Gemini API (Full Pipeline mode) | `us-central1` |
+| `LLM_MODEL` | Gemini model to use | `gemini-2.5-flash` |
 
 ### Create the template
 
@@ -77,8 +80,10 @@ The app includes pre-built attack scenarios you can trigger with one click:
 
 - **Sanitize Prompt** — screens user input before it reaches your LLM
 - **Sanitize Response** — screens model output before it reaches the user
+- **Full Pipeline** — end-to-end flow: prompt scan → Gemini generates response → response scan, demonstrating the complete safety pipeline
 - **Custom text** — type any prompt to test beyond the built-in scenarios
 - **Configuration panel** — adjust confidence thresholds and toggle filters
+- **SDP findings with quotes** — Sensitive Data Protection findings show the exact text that triggered detection
 - **Raw JSON view** — inspect the full API response for technical deep-dives
 
 ---

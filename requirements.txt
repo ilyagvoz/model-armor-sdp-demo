@@ -2,4 +2,5 @@ fastapi
 uvicorn
 google-cloud-modelarmor
 google-cloud-dlp
+google-genai
 python-dotenv

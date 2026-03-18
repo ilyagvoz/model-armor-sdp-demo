@@ -150,6 +150,10 @@
         </div>
       </div>
       <div class="flex items-center gap-4">
+        <div x-show="llmConfig" class="flex items-center gap-1.5 text-[10px] font-mono text-gray-500 border border-surface-600/50 rounded-md px-2 py-1">
+          <i data-lucide="cpu" class="w-3 h-3 text-safe"></i>
+          <span x-text="llmConfig?.model"></span>
+        </div>
         <div x-show="templateReady && templateRegion" class="flex items-center gap-1.5 text-[10px] font-mono text-gray-500 border border-surface-600/50 rounded-md px-2 py-1">
           <i data-lucide="map-pin" class="w-3 h-3 text-accent"></i>
           <span x-text="templateRegion"></span>
@@ -301,12 +305,24 @@
                   Sanitize Response
                 </span>
               </button>
+              <button
+                @click="mode = 'pipeline'"
+                class="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                :class="mode === 'pipeline' ? 'bg-safe text-surface-950' : 'text-gray-500 hover:text-gray-300'"
+              >
+                <span class="flex items-center gap-1.5">
+                  <i data-lucide="workflow" class="w-3 h-3"></i>
+                  Full Pipeline
+                </span>
+              </button>
             </div>
           </div>
           <p class="text-[11px] text-gray-500 mb-2 transition-all"
              x-text="mode === 'prompt'
                ? 'Screen user input before it reaches your LLM'
-               : 'Screen LLM output before it reaches the end user'"></p>
+               : mode === 'response'
+                 ? 'Screen LLM output before it reaches the end user'
+                 : 'Prompt → Model Armor → Gemini → Model Armor → Result'"></p>
           <div class="relative">
             <textarea
               x-model="inputText"
@@ -324,25 +340,25 @@
           </div>
         </div>
 
-        <!-- Scan button -->
+        <!-- Scan / Pipeline button -->
         <button
-          @click="scan()"
-          :disabled="!inputText.trim() || scanning || !templateReady"
+          @click="mode === 'pipeline' ? sendPipeline() : scan()"
+          :disabled="!inputText.trim() || scanning || pipelineSending || !templateReady"
           class="w-full py-3 rounded-xl font-display font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-          :class="scanning
-            ? 'bg-accent/20 text-accent border border-accent/30'
-            : 'bg-accent text-white hover:brightness-110 hover:shadow-lg hover:shadow-accent/20'"
+          :class="(scanning || pipelineSending)
+            ? (mode === 'pipeline' ? 'bg-safe/20 text-safe border border-safe/30' : 'bg-accent/20 text-accent border border-accent/30')
+            : (mode === 'pipeline' ? 'bg-safe text-surface-950 hover:brightness-110 hover:shadow-lg hover:shadow-safe/20' : 'bg-accent text-white hover:brightness-110 hover:shadow-lg hover:shadow-accent/20')"
         >
-          <template x-if="!scanning">
+          <template x-if="!scanning && !pipelineSending">
             <span class="flex items-center gap-2">
-              <i data-lucide="scan" class="w-4 h-4"></i>
-              Scan with Model Armor
+              <i :data-lucide="mode === 'pipeline' ? 'workflow' : 'scan'" class="w-4 h-4"></i>
+              <span x-text="mode === 'pipeline' ? 'Send to Pipeline' : 'Scan with Model Armor'"></span>
             </span>
           </template>
-          <template x-if="scanning">
+          <template x-if="scanning || pipelineSending">
             <span class="flex items-center gap-2">
-              <span class="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></span>
-              Analyzing...
+              <span class="w-4 h-4 border-2 rounded-full animate-spin" :class="mode === 'pipeline' ? 'border-safe border-t-transparent' : 'border-accent border-t-transparent'"></span>
+              <span x-text="mode === 'pipeline' ? 'Running Pipeline...' : 'Analyzing...'"></span>
             </span>
           </template>
         </button>
@@ -372,6 +388,199 @@
 
       <!-- Right: Results Panel -->
       <div class="space-y-5">
+
+        <!-- Pipeline Results -->
+        <template x-if="pipelineResult">
+          <div class="space-y-3 stagger-in">
+            <h2 class="text-xs font-mono text-gray-500 uppercase tracking-wider">Pipeline Results</h2>
+
+            <!-- Step 1: Prompt Scan -->
+            <div class="rounded-xl border p-4"
+                 :class="pipelineResult.prompt_scan.overall_match === 'MATCH_FOUND'
+                   ? 'border-blocked/30 bg-blocked/5'
+                   : 'border-safe/30 bg-safe/5'">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                     :class="pipelineResult.prompt_scan.overall_match === 'MATCH_FOUND'
+                       ? 'bg-blocked text-white' : 'bg-safe text-surface-950'">1</div>
+                <div class="flex-1">
+                  <h3 class="text-sm font-semibold text-white">Prompt Scan</h3>
+                  <p class="text-[10px] font-mono text-gray-500">Model Armor screens user input</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono text-gray-500" x-text="pipelineResult.prompt_scan.elapsed_ms + 'ms'"></span>
+                  <span class="px-2.5 py-1 rounded-lg text-xs font-bold"
+                        :class="pipelineResult.prompt_scan.overall_match === 'MATCH_FOUND'
+                          ? 'bg-blocked/15 text-blocked' : 'bg-safe/10 text-safe'"
+                        x-text="pipelineResult.prompt_scan.overall_match === 'MATCH_FOUND' ? 'BLOCKED' : 'PASS'"></span>
+                </div>
+              </div>
+              <!-- Filter details (collapsed) -->
+              <div x-data="{ expanded: false }">
+                <button @click="expanded = !expanded"
+                  class="flex items-center gap-1.5 text-[11px] font-mono text-gray-500 hover:text-gray-300 transition ml-10">
+                  <i :data-lucide="expanded ? 'chevron-down' : 'chevron-right'" class="w-3 h-3"></i>
+                  Filter details
+                </button>
+                <template x-if="expanded">
+                  <div class="ml-10 mt-2 grid gap-1.5">
+                    <template x-for="(filter, name) in pipelineResult.prompt_scan.filters" :key="name">
+                      <div>
+                        <div class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-surface-800/60">
+                          <span class="text-[11px] text-gray-400" x-text="name.replace(/_/g, ' ')"></span>
+                          <span class="w-1.5 h-1.5 rounded-full" :class="(filter.matched || filter.inspect?.matched) ? 'bg-blocked' : 'bg-safe/50'"></span>
+                        </div>
+                        <template x-if="filter.inspect?.findings?.length > 0">
+                          <div class="flex flex-wrap gap-1 mt-1 ml-2">
+                            <template x-for="(f, i) in filter.inspect.findings" :key="i">
+                              <span class="px-1.5 py-0.5 rounded bg-blocked/10 text-blocked text-[10px] font-mono"
+                                    x-text="f.info_type + (f.likelihood ? ' (' + f.likelihood + ')' : '') + (f.quote ? ' → ' + f.quote : '')"></span>
+                            </template>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Connector line -->
+            <div class="flex justify-start ml-[13px]">
+              <div class="w-0.5 h-4" :class="pipelineResult.llm.skipped ? 'bg-gray-700' : 'bg-surface-600'"></div>
+            </div>
+
+            <!-- Step 2: Gemini Response -->
+            <div class="rounded-xl border p-4"
+                 :class="pipelineResult.llm.skipped
+                   ? 'border-surface-600/30 bg-surface-900/30 opacity-50'
+                   : pipelineResult.llm.error
+                     ? 'border-blocked/30 bg-blocked/5'
+                     : 'border-accent/30 bg-accent/5'">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                     :class="pipelineResult.llm.skipped
+                       ? 'bg-gray-700 text-gray-500'
+                       : pipelineResult.llm.error
+                         ? 'bg-blocked text-white'
+                         : 'bg-accent text-white'">2</div>
+                <div class="flex-1">
+                  <h3 class="text-sm font-semibold text-white">Gemini Response</h3>
+                  <p class="text-[10px] font-mono text-gray-500">
+                    <span x-text="pipelineResult.llm.model || llmConfig?.model || ''"></span>
+                    <template x-if="pipelineResult.llm.elapsed_ms">
+                      <span x-text="' · ' + pipelineResult.llm.elapsed_ms + 'ms'"></span>
+                    </template>
+                  </p>
+                </div>
+                <span class="px-2.5 py-1 rounded-lg text-xs font-bold"
+                      :class="pipelineResult.llm.skipped
+                        ? 'bg-gray-700/50 text-gray-500'
+                        : pipelineResult.llm.error
+                          ? 'bg-blocked/15 text-blocked'
+                          : 'bg-accent/15 text-accent'"
+                      x-text="pipelineResult.llm.skipped ? 'SKIPPED' : pipelineResult.llm.error ? 'ERROR' : 'OK'"></span>
+              </div>
+              <template x-if="pipelineResult.llm.skipped">
+                <p class="ml-10 text-xs text-gray-500 italic" x-text="pipelineResult.llm.reason"></p>
+              </template>
+              <template x-if="pipelineResult.llm.error">
+                <p class="ml-10 text-xs text-blocked font-mono" x-text="pipelineResult.llm.error"></p>
+              </template>
+              <template x-if="pipelineResult.llm.text">
+                <div class="ml-10 mt-1 p-3 rounded-lg bg-surface-800/80 border border-surface-600/30">
+                  <p class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap" x-text="pipelineResult.llm.text"></p>
+                </div>
+              </template>
+            </div>
+
+            <!-- Connector line -->
+            <div class="flex justify-start ml-[13px]">
+              <div class="w-0.5 h-4" :class="pipelineResult.response_scan.skipped ? 'bg-gray-700' : 'bg-surface-600'"></div>
+            </div>
+
+            <!-- Step 3: Response Scan -->
+            <div class="rounded-xl border p-4"
+                 :class="pipelineResult.response_scan.skipped
+                   ? 'border-surface-600/30 bg-surface-900/30 opacity-50'
+                   : pipelineResult.response_scan.overall_match === 'MATCH_FOUND'
+                     ? 'border-blocked/30 bg-blocked/5'
+                     : 'border-safe/30 bg-safe/5'">
+              <div class="flex items-center gap-3 mb-2">
+                <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                     :class="pipelineResult.response_scan.skipped
+                       ? 'bg-gray-700 text-gray-500'
+                       : pipelineResult.response_scan.overall_match === 'MATCH_FOUND'
+                         ? 'bg-blocked text-white' : 'bg-safe text-surface-950'">3</div>
+                <div class="flex-1">
+                  <h3 class="text-sm font-semibold text-white">Response Scan</h3>
+                  <p class="text-[10px] font-mono text-gray-500">Model Armor screens LLM output</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <template x-if="pipelineResult.response_scan.elapsed_ms">
+                    <span class="text-xs font-mono text-gray-500" x-text="pipelineResult.response_scan.elapsed_ms + 'ms'"></span>
+                  </template>
+                  <span class="px-2.5 py-1 rounded-lg text-xs font-bold"
+                        :class="pipelineResult.response_scan.skipped
+                          ? 'bg-gray-700/50 text-gray-500'
+                          : pipelineResult.response_scan.overall_match === 'MATCH_FOUND'
+                            ? 'bg-blocked/15 text-blocked' : 'bg-safe/10 text-safe'"
+                        x-text="pipelineResult.response_scan.skipped
+                          ? 'SKIPPED'
+                          : pipelineResult.response_scan.overall_match === 'MATCH_FOUND' ? 'BLOCKED' : 'PASS'"></span>
+                </div>
+              </div>
+              <template x-if="pipelineResult.response_scan.skipped">
+                <p class="ml-10 text-xs text-gray-500 italic" x-text="pipelineResult.response_scan.reason"></p>
+              </template>
+              <!-- Filter details (collapsed) -->
+              <template x-if="!pipelineResult.response_scan.skipped && pipelineResult.response_scan.filters">
+                <div x-data="{ expanded: false }">
+                  <button @click="expanded = !expanded"
+                    class="flex items-center gap-1.5 text-[11px] font-mono text-gray-500 hover:text-gray-300 transition ml-10">
+                    <i :data-lucide="expanded ? 'chevron-down' : 'chevron-right'" class="w-3 h-3"></i>
+                    Filter details
+                  </button>
+                  <template x-if="expanded">
+                    <div class="ml-10 mt-2 grid gap-1.5">
+                      <template x-for="(filter, name) in pipelineResult.response_scan.filters" :key="name">
+                        <div>
+                          <div class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-surface-800/60">
+                            <span class="text-[11px] text-gray-400" x-text="name.replace(/_/g, ' ')"></span>
+                            <span class="w-1.5 h-1.5 rounded-full" :class="(filter.matched || filter.inspect?.matched) ? 'bg-blocked' : 'bg-safe/50'"></span>
+                          </div>
+                          <template x-if="filter.inspect?.findings?.length > 0">
+                            <div class="flex flex-wrap gap-1 mt-1 ml-2">
+                              <template x-for="(f, i) in filter.inspect.findings" :key="i">
+                                <span class="px-1.5 py-0.5 rounded bg-blocked/10 text-blocked text-[10px] font-mono"
+                                      x-text="f.info_type + (f.likelihood ? ' (' + f.likelihood + ')' : '') + (f.quote ? ' → ' + f.quote : '')"></span>
+                              </template>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+
+            <!-- Pipeline raw JSON -->
+            <div>
+              <button @click="showRawJson = !showRawJson"
+                class="flex items-center gap-2 text-xs font-mono text-gray-500 hover:text-gray-300 transition mb-2">
+                <i :data-lucide="showRawJson ? 'chevron-down' : 'chevron-right'" class="w-3 h-3"></i>
+                Raw API Response
+              </button>
+              <template x-if="showRawJson">
+                <div class="rounded-xl border border-surface-600/30 bg-surface-950 p-4 overflow-auto max-h-80">
+                  <pre class="text-[11px] font-mono leading-relaxed" x-html="syntaxHighlight(JSON.stringify(pipelineResult, null, 2))"></pre>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
         <!-- Verdict banner -->
         <template x-if="result">
           <div class="stagger-in">
@@ -403,7 +612,7 @@
         </template>
 
         <!-- Empty state -->
-        <template x-if="!result && !scanning">
+        <template x-if="!result && !pipelineResult && !scanning && !pipelineSending">
           <div class="rounded-xl border border-surface-600/30 bg-surface-900/30 p-12 flex flex-col items-center justify-center text-center">
             <div class="w-16 h-16 rounded-2xl bg-surface-800 border border-surface-600/50 flex items-center justify-center mb-4">
               <i data-lucide="scan" class="w-8 h-8 text-gray-600"></i>
@@ -516,7 +725,7 @@
                 <div x-show="result?.filters?.sdp?.inspect?.findings?.length > 0" class="ml-11 mt-2 flex flex-wrap gap-1.5">
                   <template x-for="(finding, idx) in (result?.filters?.sdp?.inspect?.findings || [])" :key="idx">
                     <span class="px-2 py-0.5 rounded bg-blocked/10 text-blocked text-[10px] font-mono"
-                          x-text="finding.info_type + (finding.likelihood ? ' (' + finding.likelihood + ')' : '')"></span>
+                          x-text="finding.info_type + (finding.likelihood ? ' (' + finding.likelihood + ')' : '') + (finding.quote ? ' → ' + finding.quote : '')"></span>
                   </template>
                 </div>
               </div>
@@ -622,6 +831,9 @@
         mode: 'prompt',
         scanning: false,
         result: null,
+        pipelineResult: null,
+        pipelineSending: false,
+        llmConfig: null,
         error: null,
         templateReady: false,
         templateChecked: false,
@@ -645,8 +857,7 @@
 
         async init() {
           lucide.createIcons();
-          await this.loadScenarios();
-          await this.checkTemplate();
+          await Promise.all([this.loadScenarios(), this.checkTemplate(), this.loadLlmConfig()]);
         },
 
         async loadScenarios() {
@@ -675,6 +886,14 @@
           this.templateChecked = true;
         },
 
+        async loadLlmConfig() {
+          try {
+            const res = await fetch('/api/llm-config');
+            if (res.ok) this.llmConfig = await res.json();
+          } catch { /* optional */ }
+          this.$nextTick(() => lucide.createIcons());
+        },
+
         async setupTemplate() {
           this.setupLoading = true;
           this.error = null;
@@ -699,6 +918,7 @@
           this.activeScenario = scenario;
           this.inputText = scenario.prompt;
           this.result = null;
+          this.pipelineResult = null;
           this.error = null;
           this.$nextTick(() => lucide.createIcons());
         },
@@ -707,6 +927,7 @@
           if (!this.inputText.trim() || this.scanning) return;
           this.scanning = true;
           this.result = null;
+          this.pipelineResult = null;
           this.error = null;
 
           const endpoint = this.mode === 'prompt'
@@ -729,6 +950,33 @@
             this.error = e.message;
           } finally {
             this.scanning = false;
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async sendPipeline() {
+          if (!this.inputText.trim() || this.pipelineSending) return;
+          this.pipelineSending = true;
+          this.pipelineResult = null;
+          this.result = null;
+          this.error = null;
+
+          try {
+            const res = await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: this.inputText }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+              this.pipelineResult = data;
+            } else {
+              this.error = data.detail || 'Pipeline failed';
+            }
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.pipelineSending = false;
             this.$nextTick(() => lucide.createIcons());
           }
         },
