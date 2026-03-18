@@ -150,6 +150,10 @@
         </div>
       </div>
       <div class="flex items-center gap-4">
+        <div x-show="templateReady && templateRegion" class="flex items-center gap-1.5 text-[10px] font-mono text-gray-500 border border-surface-600/50 rounded-md px-2 py-1">
+          <i data-lucide="map-pin" class="w-3 h-3 text-accent"></i>
+          <span x-text="templateRegion"></span>
+        </div>
         <div class="flex items-center gap-2 text-xs font-mono">
           <span class="w-1.5 h-1.5 rounded-full" :class="templateReady ? 'bg-safe' : 'bg-blocked'"></span>
           <span class="text-gray-500" x-text="templateReady ? 'Template Active' : 'Template Not Ready'"></span>
@@ -621,6 +625,11 @@
         error: null,
         templateReady: false,
         templateName: '',
+        get templateRegion() {
+          // Extract region from resource name: projects/.../locations/REGION/templates/...
+          const match = this.templateName.match(/locations\/([^/]+)/);
+          return match ? match[1] : '';
+        },
         showConfig: false,
         showRawJson: false,
         setupLoading: false,
