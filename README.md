@@ -92,6 +92,28 @@ The app includes pre-built attack scenarios you can trigger with one click:
 - **SDP findings with quotes** — Sensitive Data Protection findings show the exact text that triggered detection
 - **Raw JSON view** — inspect the full API response for technical deep-dives
 
+## Architecture
+
+### De-identification
+
+Sensitive Data Protection's `deidentifyContent` API replaces PII inline before the prompt reaches Gemini. Unlike Model Armor's SDP filter — which blocks the entire request — de-identification transforms the text so it remains useful. The built-in `AUSTRALIA_TAX_FILE_NUMBER` and `AUSTRALIA_MEDICARE_NUMBER` detectors validate checksums algorithmically, so only structurally valid numbers are redacted. Setting `min_likelihood: UNLIKELY` allows detection without requiring a label (like `TFN:`) to be present.
+
+![De-identification architecture: User → Frontend → FastAPI → Google Cloud DLP/SDP → Gemini, with TFN and Medicare checksum validation detail and a before/after transformation example](docs/deidentification-architecture.png)
+
+### Model Armor
+
+Model Armor acts as a security gateway for every LLM request. A single template — configured with PI & Jailbreak, Malicious URI, Responsible AI, and Sensitive Data Protection filters — is applied to both the prompt (input) and optionally the model response (output). If any filter matches, the request is blocked before it reaches Gemini.
+
+**Option 1 — Custom application stack:** your server calls `sanitizeUserPrompt()` before forwarding to Gemini, and optionally `sanitizeModelResponse()` on the reply. This is how the demo is built.
+
+**Option 2 — Gemini Enterprise:** multiple enterprise services (Spring Boot, .NET, Python/LangChain etc.) share one centralised template defined at GCP project level. Each service calls Model Armor independently using the same template name — update rules once, all services benefit immediately.
+
+![Model Armor architecture showing Option 1 (custom FastAPI stack) and Option 2 (Gemini Enterprise with multiple services sharing a centralised template)](docs/model-armor-architecture.png)
+
+> **Note:** This pattern applies to any server-side application that owns the Vertex AI API call. It does **not** apply to Gemini for Google Workspace (Gmail, Docs, Sheets), where Google controls the infrastructure.
+
+---
+
 ## Sensitive Data Protection checksum validation
 
 Sensitive Data Protection (SDP) does not rely on pattern matching alone for structured identifiers. It also validates check digits algorithmically. A number that looks like a TFN or Medicare number but fails the checksum will **not** be detected, regardless of the minimum likelihood setting.

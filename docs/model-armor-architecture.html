@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1440">
+  <title>Model Armour — Model Armor Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
+  <style>
+    :root {
+      --blue:      #4285F4;
+      --red:       #EA4335;
+      --yellow:    #FBBC04;
+      --yellow-dk: #F9AB00;
+      --green:     #34A853;
+      --blue-50:   #E8F0FE;
+      --red-50:    #FCE8E6;
+      --yellow-50: #FEF3CD;
+      --green-50:  #E6F4EA;
+      --surface:   #FFFFFF;
+      --bg:        #F1F3F4;
+      --outline:   #DADCE0;
+      --text-1:    #202124;
+      --text-2:    #5F6368;
+      --text-3:    #9AA0A6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 1440px; }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: var(--bg);
+      background-image: radial-gradient(circle, #C5CAE9 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      line-height: 1; vertical-align: middle;
+    }
+    .fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+    /* ── HEADER ─────────────────────────────────────── */
+    header {
+      height: 62px;
+      background: var(--blue);
+      display: flex; align-items: center;
+      padding: 0 48px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.20);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .hd-brand { display: flex; align-items: center; gap: 10px; color: #fff; }
+    .hd-brand .material-symbols-outlined { font-size: 30px; }
+    .hd-brand-name { font-size: 20px; font-weight: 500; }
+    .hd-center {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      color: rgba(255,255,255,0.88); font-size: 13px; font-weight: 400;
+      letter-spacing: 0.10em; text-transform: uppercase;
+    }
+    .hd-badge {
+      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      color: rgba(255,255,255,0.92); font-size: 13px; font-weight: 500;
+      background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 20px; padding: 5px 14px;
+    }
+    .hd-badge .material-symbols-outlined { font-size: 16px; }
+
+    /* ── OPTION SECTIONS ─────────────────────────────── */
+    .option-section { padding: 20px 48px 24px; }
+
+    .option-label {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+    }
+    .opt-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      border-radius: 6px; padding: 4px 12px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .opt-badge-1 { background: var(--blue); color: white; }
+    .opt-badge-2 { background: var(--green); color: white; }
+    .opt-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+    .opt-desc  { font-size: 12px; color: var(--text-2); margin-left: 4px; }
+
+    /* ── SHARED: PIPELINE NODES ─────────────────────── */
+    .pipeline { display: flex; align-items: center; }
+
+    .node {
+      background: var(--surface); border-radius: 10px;
+      padding: 12px 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.07);
+      border-top: 3px solid var(--nc, #9AA0A6); flex-shrink: 0;
+    }
+    .node-icon {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: var(--nbg, #F1F3F4);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .node-icon .material-symbols-outlined { font-size: 24px; color: var(--nc, #9AA0A6); }
+    .node-name { font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--nc, #9AA0A6); margin-top: 2px; }
+    .node-sub  { font-size: 11px; color: var(--text-2); text-align: center; line-height: 1.4; }
+
+    .n-blue   { --nc: var(--blue);      --nbg: var(--blue-50); }
+    .n-red    { --nc: var(--red);       --nbg: var(--red-50); }
+    .n-green  { --nc: var(--green);     --nbg: var(--green-50); }
+
+    /* Model Armor prominent node */
+    .node-ma {
+      background: var(--surface); border-radius: 10px;
+      padding: 14px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      box-shadow: 0 2px 8px rgba(66,133,244,0.22), 0 6px 20px rgba(66,133,244,0.14);
+      border: 1.5px solid rgba(66,133,244,0.35); border-top: none;
+      position: relative; flex-shrink: 0;
+    }
+    .node-ma::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, var(--blue) 0%, #1a73e8 100%);
+      border-radius: 10px 10px 0 0;
+    }
+    .node-ma .node-icon { width: 48px; height: 48px; background: var(--blue-50); }
+    .node-ma .node-icon .material-symbols-outlined { font-size: 28px; color: var(--blue); }
+    .node-ma .node-name { color: var(--blue); font-size: 11px; }
+
+    /* ── SHARED: DOUBLE ARROW ───────────────────────── */
+    .darrow { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 0 6px; min-width: 56px; }
+    .darrow-lbl { font-size: 9px; color: var(--text-3); white-space: nowrap; text-align: center; }
+    .darrow-lbl.out { color: #2d8653; }
+    .darrow-body { display: flex; align-items: center; }
+    .shaft-in  { flex: 1; height: 2px; background: var(--blue); }
+    .tip-in    { width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid var(--blue); }
+    .tip-out   { width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-right: 7px solid var(--green); }
+    .shaft-out { flex: 1; height: 2px; background: repeating-linear-gradient(90deg, var(--green) 0, var(--green) 5px, transparent 5px, transparent 10px); }
+
+    /* Simple one-way arrow */
+    .sarrow { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 6px; min-width: 48px; }
+    .sarrow-lbl { font-size: 9px; color: var(--text-3); white-space: nowrap; text-align: center; }
+    .sarrow-body { display: flex; align-items: center; }
+
+    /* ── OPT 1: LEGEND ──────────────────────────────── */
+    .legend-row { display: flex; align-items: center; gap: 24px; padding: 0 4px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-2); }
+
+    /* ── OPT 1: TEMPLATE SECTION ────────────────────── */
+    .tmpl-section {
+      background: var(--surface); border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.07);
+      border-left: 4px solid var(--blue); padding: 16px 20px 14px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .tmpl-hd { display: flex; align-items: center; gap: 10px; }
+    .tmpl-hd .material-symbols-outlined { font-size: 20px; color: var(--blue); }
+    .tmpl-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-1); }
+    .pill { border-radius: 100px; padding: 2px 10px; font-size: 11px; font-weight: 500; }
+    .pill-blue { background: var(--blue-50); border: 1px solid var(--blue); color: #1a56cc; }
+    .pill-red  { background: var(--red-50);  border: 1px solid var(--red);  color: #c5221f; }
+
+    .filters-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .fcard {
+      background: var(--bg); border-radius: 8px; border: 1px solid var(--outline);
+      border-top: 3px solid var(--fc, #9AA0A6); padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 9px;
+    }
+    .fcard-hd { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--outline); }
+    .fcard-icon {
+      width: 30px; height: 30px; border-radius: 7px; background: var(--fib, #F1F3F4);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .fcard-icon .material-symbols-outlined { font-size: 17px; color: var(--fc, #9AA0A6); }
+    .fcard-name { font-size: 12px; font-weight: 600; color: var(--text-1); line-height: 1.2; }
+    .fcard-api  { font-family: 'Roboto Mono', monospace; font-size: 9.5px; color: var(--fc, #9AA0A6); margin-top: 1px; }
+
+    .fc-blue   { --fc: var(--blue);      --fib: var(--blue-50); }
+    .fc-red    { --fc: var(--red);       --fib: var(--red-50); }
+    .fc-yellow { --fc: var(--yellow-dk); --fib: var(--yellow-50); }
+    .fc-green  { --fc: var(--green);     --fib: var(--green-50); }
+
+    .frows { display: flex; flex-direction: column; gap: 5px; }
+    .frow  { display: flex; align-items: baseline; gap: 8px; }
+    .fk { font-size: 11px; font-weight: 500; color: var(--text-2); min-width: 62px; }
+    .fv { font-family: 'Roboto Mono', monospace; font-size: 10.5px; color: var(--text-1); line-height: 1.4; }
+
+    .badge { display: inline-flex; align-items: center; border-radius: 3px; padding: 1px 7px; font-size: 10.5px; font-weight: 500; }
+    .badge-blue   { background: var(--blue-50);   color: var(--blue); }
+    .badge-red    { background: var(--red-50);    color: #c5221f; }
+    .badge-amber  { background: var(--yellow-50); color: #7A4F00; }
+    .badge-green  { background: var(--green-50);  color: #137333; }
+
+    .sub-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip { background: white; border: 1px solid var(--outline); border-radius: 3px; padding: 2px 7px; font-size: 10px; color: var(--text-2); }
+
+    /* ── OPT 1: DECISION ROW ────────────────────────── */
+    .decision-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .dec { border-radius: 8px; padding: 11px 16px; display: flex; align-items: flex-start; gap: 12px; }
+    .dec-block { background: var(--red-50);   border: 1px solid var(--red); }
+    .dec-allow { background: var(--green-50); border: 1px solid var(--green); }
+    .dec-block .material-symbols-outlined { font-size: 24px; color: var(--red);   flex-shrink: 0; margin-top: 1px; }
+    .dec-allow .material-symbols-outlined { font-size: 24px; color: var(--green); flex-shrink: 0; margin-top: 1px; }
+    .dec-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+    .dec-block .dec-title { color: #c5221f; }
+    .dec-allow .dec-title { color: #137333; }
+    .dec-body { font-size: 11px; color: var(--text-2); line-height: 1.5; }
+    .code-r { font-family: 'Roboto Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--red);   background: white; border-radius: 2px; padding: 0 4px; }
+    .code-g { font-family: 'Roboto Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--green); background: white; border-radius: 2px; padding: 0 4px; }
+
+    /* ── DIVIDER ────────────────────────────────────── */
+    .section-divider {
+      margin: 0 48px;
+      border: none; border-top: 2px dashed var(--outline);
+      position: relative;
+    }
+    .section-divider::after {
+      content: 'vs';
+      position: absolute; left: 50%; top: -11px; transform: translateX(-50%);
+      background: var(--bg); padding: 0 12px;
+      font-size: 12px; font-weight: 700; color: var(--text-3); letter-spacing: 0.06em;
+    }
+
+    /* ── OPT 2: ENTERPRISE PIPELINE ─────────────────── */
+    .ent-pipeline { display: flex; align-items: center; justify-content: center; }
+
+    /* Service stack (left column) */
+    .svc-stack { display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; }
+    .svc-card {
+      width: 185px; background: var(--surface); border-radius: 8px;
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.09), 0 2px 6px rgba(0,0,0,0.06);
+      border-left: 4px solid var(--sc, #9AA0A6);
+    }
+    .svc-icon {
+      width: 32px; height: 32px; border-radius: 8px; background: var(--sib, #F1F3F4);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .svc-icon .material-symbols-outlined { font-size: 18px; color: var(--sc, #9AA0A6); }
+    .svc-name { font-size: 12px; font-weight: 600; color: var(--text-1); line-height: 1.2; }
+    .svc-tech { font-family: 'Roboto Mono', monospace; font-size: 10px; color: var(--sc, #9AA0A6); margin-top: 1px; }
+
+    .sc-blue   { --sc: var(--blue);      --sib: var(--blue-50); }
+    .sc-red    { --sc: var(--red);       --sib: var(--red-50); }
+    .sc-yellow { --sc: var(--yellow-dk); --sib: var(--yellow-50); }
+
+    /* Fan-in SVG connector */
+    .fanin-svg { flex-shrink: 0; display: block; }
+
+    /* Shared template highlight box around MA node */
+    .shared-ma-wrap {
+      position: relative; flex-shrink: 0;
+      border: 1.5px dashed rgba(66,133,244,0.5);
+      border-radius: 14px; padding: 22px 12px 10px;
+      background: rgba(232,240,254,0.35);
+    }
+    .shared-badge {
+      position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+      background: var(--blue); color: white;
+      font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      border-radius: 100px; padding: 3px 10px; white-space: nowrap;
+    }
+
+    /* ── OPT 2: KEY DIFFERENCES ─────────────────────── */
+    .diff-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .diff-card {
+      background: var(--surface); border-radius: 8px;
+      border: 1px solid var(--outline); border-top: 3px solid var(--dc, #9AA0A6);
+      padding: 12px 14px; display: flex; flex-direction: column; gap: 7px;
+    }
+    .dc-blue   { --dc: var(--blue); }
+    .dc-red    { --dc: var(--red); }
+    .dc-green  { --dc: var(--green); }
+    .dc-yellow { --dc: var(--yellow-dk); }
+
+    .diff-hd { display: flex; align-items: center; gap: 8px; }
+    .diff-hd .material-symbols-outlined { font-size: 18px; color: var(--dc, #9AA0A6); }
+    .diff-title { font-size: 12px; font-weight: 600; color: var(--text-1); }
+    .diff-body  { font-size: 11px; color: var(--text-2); line-height: 1.5; }
+    .diff-mono  { font-family: 'Roboto Mono', monospace; font-size: 10px; color: var(--dc); background: var(--bg); border-radius: 3px; padding: 1px 5px; }
+
+    /* ── OPT 2: WORKSPACE NOTE ──────────────────────── */
+    .ws-note {
+      background: var(--yellow-50); border: 1px solid var(--yellow-dk);
+      border-radius: 8px; padding: 10px 16px;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .ws-note .material-symbols-outlined { font-size: 20px; color: var(--yellow-dk); flex-shrink: 0; margin-top: 1px; }
+    .ws-note-text { font-size: 12px; color: var(--text-1); line-height: 1.5; }
+    .ws-note-text strong { font-weight: 600; }
+
+    /* ── GAP UTIL ───────────────────────────────────── */
+    .gap-12 { height: 12px; }
+    .gap-14 { height: 14px; }
+    .gap-16 { height: 16px; }
+    .gap-20 { height: 20px; }
+    .gap-28 { height: 28px; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="hd-brand">
+      <span class="material-symbols-outlined fill">security</span>
+      <span class="hd-brand-name">Model Armour</span>
+    </div>
+    <div class="hd-center">Model Armor — LLM Input &amp; Output Architecture</div>
+    <div class="hd-badge">
+      <span class="material-symbols-outlined fill">cloud</span>
+      Google Cloud
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- OPTION 1                                                       -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="option-section">
+
+    <div class="option-label">
+      <span class="opt-badge opt-badge-1">
+        <span class="material-symbols-outlined fill" style="font-size:14px">code</span>
+        Option 1
+      </span>
+      <span class="opt-title">Custom Application Stack</span>
+      <span class="opt-desc">— Your own server + frontend calling Model Armor explicitly before every LLM request</span>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="pipeline">
+      <div class="node n-blue" style="width:132px">
+        <div class="node-icon"><span class="material-symbols-outlined fill">person</span></div>
+        <div class="node-name">User</div>
+        <div class="node-sub">Sends prompt<br>reads response</div>
+      </div>
+      <div class="darrow">
+        <div class="darrow-lbl">input text →</div>
+        <div class="darrow-body"><div class="shaft-in"></div><div class="tip-in"></div></div>
+        <div class="darrow-body"><div class="tip-out"></div><div class="shaft-out"></div></div>
+        <div class="darrow-lbl out">← response</div>
+      </div>
+      <div class="node n-blue" style="width:148px">
+        <div class="node-icon"><span class="material-symbols-outlined">web</span></div>
+        <div class="node-name">Frontend</div>
+        <div class="node-sub">Alpine.js<br>index.html</div>
+      </div>
+      <div class="darrow">
+        <div class="darrow-lbl">POST /api/scan →</div>
+        <div class="darrow-body"><div class="shaft-in"></div><div class="tip-in"></div></div>
+        <div class="darrow-body"><div class="tip-out"></div><div class="shaft-out"></div></div>
+        <div class="darrow-lbl out">← scan result</div>
+      </div>
+      <div class="node n-red" style="width:148px">
+        <div class="node-icon"><span class="material-symbols-outlined">api</span></div>
+        <div class="node-name">FastAPI Server</div>
+        <div class="node-sub">server.py<br>/api/sanitize-*</div>
+      </div>
+      <div class="darrow">
+        <div class="darrow-lbl">sanitizeUserPrompt() →</div>
+        <div class="darrow-body"><div class="shaft-in"></div><div class="tip-in"></div></div>
+        <div class="darrow-body"><div class="tip-out"></div><div class="shaft-out"></div></div>
+        <div class="darrow-lbl out">← sanitizeModelResponse()</div>
+      </div>
+      <div class="node-ma" style="width:210px">
+        <div class="node-icon"><span class="material-symbols-outlined fill">security</span></div>
+        <div class="node-name">Model Armor API</div>
+        <div class="node-sub" style="font-size:10.5px">modelarmor.{region}<br>.rep.googleapis.com</div>
+      </div>
+      <div class="darrow">
+        <div class="darrow-lbl">NO_MATCH → pass →</div>
+        <div class="darrow-body"><div class="shaft-in"></div><div class="tip-in"></div></div>
+        <div class="darrow-body"><div class="tip-out"></div><div class="shaft-out"></div></div>
+        <div class="darrow-lbl out">← response (optional scan)</div>
+      </div>
+      <div class="node n-green" style="width:150px">
+        <div class="node-icon"><span class="material-symbols-outlined fill">auto_awesome</span></div>
+        <div class="node-name">Gemini 2.5 Flash</div>
+        <div class="node-sub">Vertex AI<br>LLM generation</div>
+      </div>
+    </div>
+
+    <div class="gap-12"></div>
+
+    <!-- Legend -->
+    <div class="legend-row">
+      <div class="legend-item">
+        <div style="display:flex;align-items:center">
+          <div style="width:28px;height:2px;background:var(--blue)"></div>
+          <div style="width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:7px solid var(--blue)"></div>
+        </div>
+        LLM Input — <code style="font-family:'Roboto Mono',monospace;font-size:10px">sanitizeUserPrompt()</code>
+      </div>
+      <div class="legend-item">
+        <div style="display:flex;align-items:center">
+          <div style="width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-right:7px solid var(--green)"></div>
+          <div style="width:28px;height:2px;background:repeating-linear-gradient(90deg,var(--green) 0,var(--green) 5px,transparent 5px,transparent 10px)"></div>
+        </div>
+        LLM Output — <code style="font-family:'Roboto Mono',monospace;font-size:10px">sanitizeModelResponse()</code> &nbsp;(optional)
+      </div>
+      <div class="legend-item" style="margin-left:auto;color:var(--text-3);font-size:10px">
+        <span class="material-symbols-outlined fill" style="font-size:14px;color:var(--blue)">shield</span>
+        Same template applied to both input and output scans
+      </div>
+    </div>
+
+    <div class="gap-14"></div>
+
+    <!-- Template section -->
+    <div class="tmpl-section">
+      <div class="tmpl-hd">
+        <span class="material-symbols-outlined fill">tune</span>
+        <span class="tmpl-title">Model Armor Template — Filter Configuration</span>
+        <span class="pill pill-blue" style="margin-left:4px">FilterConfig</span>
+        <span class="pill pill-red" style="margin-left:6px">Applied to Input &amp; Output</span>
+      </div>
+      <div class="filters-grid">
+        <div class="fcard fc-blue">
+          <div class="fcard-hd">
+            <div class="fcard-icon"><span class="material-symbols-outlined fill">shield</span></div>
+            <div>
+              <div class="fcard-name">PI &amp; Jailbreak Detection</div>
+              <div class="fcard-api">PiAndJailbreakFilterSettings</div>
+            </div>
+          </div>
+          <div class="frows">
+            <div class="frow"><span class="fk">Status</span><span class="badge badge-blue">ENABLED</span></div>
+            <div class="frow"><span class="fk">Confidence</span><span class="fv">MEDIUM_AND_ABOVE</span></div>
+            <div class="frow" style="align-items:flex-start">
+              <span class="fk">Detects</span>
+              <span class="fv">Prompt injection attempts,<br>jailbreak instructions,<br>system prompt overrides</span>
+            </div>
+          </div>
+        </div>
+        <div class="fcard fc-red">
+          <div class="fcard-hd">
+            <div class="fcard-icon"><span class="material-symbols-outlined fill">report</span></div>
+            <div>
+              <div class="fcard-name">Malicious URI Detection</div>
+              <div class="fcard-api">MaliciousUriFilterSettings</div>
+            </div>
+          </div>
+          <div class="frows">
+            <div class="frow"><span class="fk">Status</span><span class="badge badge-red">ENABLED</span></div>
+            <div class="frow" style="align-items:flex-start">
+              <span class="fk">Detects</span>
+              <span class="fv">Phishing URLs,<br>malware links,<br>malicious domains</span>
+            </div>
+            <div class="frow"><span class="fk">Coverage</span><span class="fv">All embedded URIs</span></div>
+          </div>
+        </div>
+        <div class="fcard fc-yellow">
+          <div class="fcard-hd">
+            <div class="fcard-icon"><span class="material-symbols-outlined fill">warning</span></div>
+            <div>
+              <div class="fcard-name">Responsible AI Filters</div>
+              <div class="fcard-api">RaiFilterSettings</div>
+            </div>
+          </div>
+          <div class="frows">
+            <div class="frow"><span class="fk">Confidence</span><span class="badge badge-amber">MEDIUM_AND_ABOVE</span></div>
+            <div class="frow"><span class="fk">Categories</span></div>
+            <div class="sub-chips">
+              <span class="chip">Hate Speech</span>
+              <span class="chip">Harassment</span>
+              <span class="chip">Sexually Explicit</span>
+              <span class="chip">Dangerous Content</span>
+            </div>
+          </div>
+        </div>
+        <div class="fcard fc-green">
+          <div class="fcard-hd">
+            <div class="fcard-icon"><span class="material-symbols-outlined fill">fingerprint</span></div>
+            <div>
+              <div class="fcard-name">Sensitive Data Protection</div>
+              <div class="fcard-api">SdpFilterSettings → Advanced</div>
+            </div>
+          </div>
+          <div class="frows">
+            <div class="frow"><span class="fk">Config</span><span class="badge badge-green">DLP Inspect Template</span></div>
+            <div class="frow" style="align-items:flex-start">
+              <span class="fk">Detects</span>
+              <span class="fv">TFN, Medicare, Credit Card,<br>Email, Phone, API Keys,<br>Passports, Credentials</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gap-14"></div>
+
+    <!-- Decision row -->
+    <div class="decision-row">
+      <div class="dec dec-block">
+        <span class="material-symbols-outlined fill">block</span>
+        <div>
+          <div class="dec-title">MATCH_FOUND — Request Blocked</div>
+          <div class="dec-body"><code class="code-r">filter_match_state: MATCH_FOUND</code> — Model Armor returns a block response. The prompt never reaches Gemini. On output, the model response is suppressed before returning to the user.</div>
+        </div>
+      </div>
+      <div class="dec dec-allow">
+        <span class="material-symbols-outlined fill">check_circle</span>
+        <div>
+          <div class="dec-title">NO_MATCH — Passes Through</div>
+          <div class="dec-body"><code class="code-g">filter_match_state: NO_MATCH</code> — All filters clear. On input, the prompt is forwarded to Gemini. On output, the response is returned to the user. Output scanning is optional.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /option-section 1 -->
+
+  <!-- ── Divider ── -->
+  <div class="gap-16"></div>
+  <div class="section-divider"></div>
+  <div class="gap-28"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- OPTION 2                                                       -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="option-section">
+
+    <div class="option-label">
+      <span class="opt-badge opt-badge-2">
+        <span class="material-symbols-outlined fill" style="font-size:14px">business</span>
+        Option 2
+      </span>
+      <span class="opt-title">Gemini Enterprise</span>
+      <span class="opt-desc">— Multiple enterprise services share one centralised Model Armor template. Same protection, no per-team implementation.</span>
+    </div>
+
+    <!-- Enterprise pipeline: fan-in services → shared MA → Gemini -->
+    <div class="ent-pipeline">
+
+      <!-- Services column -->
+      <div class="svc-stack">
+        <div class="svc-card sc-blue">
+          <div class="svc-icon"><span class="material-symbols-outlined">api</span></div>
+          <div>
+            <div class="svc-name">Customer Portal API</div>
+            <div class="svc-tech">Spring Boot / Java</div>
+          </div>
+        </div>
+        <div class="svc-card sc-red">
+          <div class="svc-icon"><span class="material-symbols-outlined">api</span></div>
+          <div>
+            <div class="svc-name">Internal Enterprise API</div>
+            <div class="svc-tech">.NET / C#</div>
+          </div>
+        </div>
+        <div class="svc-card sc-yellow">
+          <div class="svc-icon"><span class="material-symbols-outlined">smart_toy</span></div>
+          <div>
+            <div class="svc-name">AI Pipeline Service</div>
+            <div class="svc-tech">Python / LangChain</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fan-in SVG: 3 lines converging to one arrow -->
+      <!-- Card heights: 54px each, gaps: 12px → centers at y=27, 93, 159; total height=186 -->
+      <svg class="fanin-svg" width="100" height="186" xmlns="http://www.w3.org/2000/svg">
+        <!-- Three lines converging to merge point at (70, 93) -->
+        <path d="M0,27 C50,27 50,93 70,93"  stroke="#9AA0A6" stroke-width="1.5" fill="none"/>
+        <path d="M0,93 L70,93"              stroke="#9AA0A6" stroke-width="1.5" fill="none"/>
+        <path d="M0,159 C50,159 50,93 70,93" stroke="#9AA0A6" stroke-width="1.5" fill="none"/>
+        <!-- Arrow from merge point -->
+        <line x1="70" y1="93" x2="88" y2="93" stroke="#9AA0A6" stroke-width="1.5"/>
+        <polygon points="88,88 100,93 88,98" fill="#9AA0A6"/>
+      </svg>
+
+      <!-- Shared Model Armor wrap -->
+      <div class="shared-ma-wrap">
+        <div class="shared-badge">Centralised Shared Template</div>
+        <div class="node-ma" style="width:210px">
+          <div class="node-icon"><span class="material-symbols-outlined fill">security</span></div>
+          <div class="node-name">Model Armor API</div>
+          <div class="node-sub" style="font-size:10px">Same FilterConfig template<br>across all enterprise services</div>
+        </div>
+      </div>
+
+      <!-- Arrow to Gemini -->
+      <div class="sarrow" style="max-width:90px">
+        <div class="sarrow-lbl">NO_MATCH →</div>
+        <div class="sarrow-body">
+          <div class="shaft-in"></div>
+          <div class="tip-in"></div>
+        </div>
+        <div class="sarrow-lbl" style="color:var(--green)">← response</div>
+        <div class="sarrow-body">
+          <div class="tip-out"></div>
+          <div class="shaft-out"></div>
+        </div>
+      </div>
+
+      <!-- Gemini -->
+      <div class="node n-green" style="width:155px">
+        <div class="node-icon"><span class="material-symbols-outlined fill">auto_awesome</span></div>
+        <div class="node-name">Gemini Enterprise</div>
+        <div class="node-sub">Vertex AI<br>Enterprise tier</div>
+      </div>
+
+    </div><!-- /ent-pipeline -->
+
+    <div class="gap-16"></div>
+
+    <!-- Key differences -->
+    <div class="diff-grid">
+
+      <div class="diff-card dc-blue">
+        <div class="diff-hd">
+          <span class="material-symbols-outlined fill">hub</span>
+          <span class="diff-title">Centralised Template</span>
+        </div>
+        <div class="diff-body">
+          One <span class="diff-mono">FilterConfig</span> template defined at GCP project level.
+          All services reference the same template name — update rules once, every team benefits instantly.
+        </div>
+      </div>
+
+      <div class="diff-card dc-red">
+        <div class="diff-hd">
+          <span class="material-symbols-outlined fill">verified_user</span>
+          <span class="diff-title">IAM &amp; Org Governance</span>
+        </div>
+        <div class="diff-body">
+          Each service account granted <span class="diff-mono">modelarmor.user</span> role.
+          Template ownership is separate from usage. Full audit trail via Cloud Audit Logs.
+        </div>
+      </div>
+
+      <div class="diff-card dc-green">
+        <div class="diff-hd">
+          <span class="material-symbols-outlined fill">route</span>
+          <span class="diff-title">Any Server-Side Stack</span>
+        </div>
+        <div class="diff-body">
+          No custom frontend required. Spring Boot, .NET, Python, Node.js — any service that owns the
+          Gemini API call can call Model Armor using the same <span class="diff-mono">sanitize*()</span> pattern.
+        </div>
+      </div>
+
+      <div class="diff-card dc-yellow">
+        <div class="diff-hd">
+          <span class="material-symbols-outlined fill">balance</span>
+          <span class="diff-title">Uniform Safety Guarantee</span>
+        </div>
+        <div class="diff-body">
+          All apps get identical PI, URI, RAI and SDP protection. No per-team implementation differences.
+          Compliance enforced at infrastructure level, not per service.
+        </div>
+      </div>
+
+    </div><!-- /diff-grid -->
+
+    <div class="gap-14"></div>
+
+    <!-- Workspace note -->
+    <div class="ws-note">
+      <span class="material-symbols-outlined fill">info</span>
+      <div class="ws-note-text">
+        <strong>Not applicable to Gemini for Google Workspace</strong> (Gmail AI, Docs, Sheets, Slides).
+        Those prompts travel through Google's own infrastructure — your code does not own the API call, so Model Armor cannot intercept them.
+        Model Armor applies only where <em>your application</em> is the caller to the Vertex AI Gemini API.
+      </div>
+    </div>
+
+    <div class="gap-20"></div>
+
+  </div><!-- /option-section 2 -->
+
+</body>
+</html>

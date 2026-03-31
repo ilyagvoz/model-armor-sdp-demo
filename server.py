@@ -383,7 +383,7 @@ async def deidentify(req: DeidentifyRequest):
             parent=f"projects/{PROJECT_ID}/locations/global",
             inspect_config=dlp_v2.InspectConfig(
                 info_types=info_types,
-                min_likelihood=dlp_v2.Likelihood.POSSIBLE,
+                min_likelihood=dlp_v2.Likelihood.UNLIKELY,
             ),
             deidentify_config=dlp_v2.DeidentifyConfig(
                 info_type_transformations=dlp_v2.InfoTypeTransformations(
