@@ -34,6 +34,10 @@ DLP_INSPECT_TEMPLATE = os.environ.get(
 app = FastAPI(title="Model Armor Demo")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
+# The SDK uses verbose per-class enforcement enums; define shorthands for readability.
+_ENABLED = 1   # FilterEnforcement.ENABLED
+_DISABLED = 2  # FilterEnforcement.DISABLED
+
 
 def get_client() -> ma.ModelArmorClient:
     return ma.ModelArmorClient(
@@ -50,11 +54,11 @@ def build_default_template() -> ma.Template:
     return ma.Template(
         filter_config=ma.FilterConfig(
             pi_and_jailbreak_filter_settings=ma.PiAndJailbreakFilterSettings(
-                filter_enforcement=1,  # ENABLED
+                filter_enforcement=_ENABLED,
                 confidence_level=confidence,
             ),
             malicious_uri_filter_settings=ma.MaliciousUriFilterSettings(
-                filter_enforcement=1,  # ENABLED
+                filter_enforcement=_ENABLED,
             ),
             rai_settings=ma.RaiFilterSettings(
                 rai_filters=[
@@ -160,7 +164,7 @@ def parse_sanitization_result(result: ma.SanitizationResult, scanned_text: str =
     # SDP
     if "sdp" in fr_map:
         sdp = fr_map["sdp"].sdp_filter_result
-        sdp_info = {"inspect": None, "deidentify": None}
+        sdp_info: dict[str, dict | None] = {"inspect": None, "deidentify": None}
         if sdp.inspect_result:
             ir = sdp.inspect_result
             sdp_info["inspect"] = {
@@ -281,11 +285,11 @@ async def setup_custom_template(config: TemplateConfig):
     template = ma.Template(
         filter_config=ma.FilterConfig(
             pi_and_jailbreak_filter_settings=ma.PiAndJailbreakFilterSettings(
-                filter_enforcement=1 if config.pi_enabled else 2,
+                filter_enforcement=_ENABLED if config.pi_enabled else _DISABLED,
                 confidence_level=pi_conf,
             ),
             malicious_uri_filter_settings=ma.MaliciousUriFilterSettings(
-                filter_enforcement=1 if config.malicious_uri_enabled else 2,
+                filter_enforcement=_ENABLED if config.malicious_uri_enabled else _DISABLED,
             ),
             rai_settings=ma.RaiFilterSettings(
                 rai_filters=[
@@ -378,28 +382,31 @@ async def deidentify(req: DeidentifyRequest):
         raise HTTPException(status_code=400, detail="At least one info type must be selected")
     info_types = [{"name": t} for t in req.info_types]
 
-    response = dlp_client.deidentify_content(
-        request=dlp_v2.DeidentifyContentRequest(
-            parent=f"projects/{PROJECT_ID}/locations/global",
-            inspect_config=dlp_v2.InspectConfig(
-                info_types=info_types,
-                min_likelihood=dlp_v2.Likelihood.UNLIKELY,
-            ),
-            deidentify_config=dlp_v2.DeidentifyConfig(
-                info_type_transformations=dlp_v2.InfoTypeTransformations(
-                    transformations=[
-                        dlp_v2.InfoTypeTransformations.InfoTypeTransformation(
-                            info_types=info_types,
-                            primitive_transformation=dlp_v2.PrimitiveTransformation(
-                                replace_with_info_type_config=dlp_v2.ReplaceWithInfoTypeConfig()
-                            ),
-                        )
-                    ]
-                )
-            ),
-            item=dlp_v2.ContentItem(value=req.text),
+    try:
+        response = dlp_client.deidentify_content(
+            request=dlp_v2.DeidentifyContentRequest(
+                parent=f"projects/{PROJECT_ID}/locations/global",
+                inspect_config=dlp_v2.InspectConfig(
+                    info_types=info_types,
+                    min_likelihood=dlp_v2.Likelihood.UNLIKELY,
+                ),
+                deidentify_config=dlp_v2.DeidentifyConfig(
+                    info_type_transformations=dlp_v2.InfoTypeTransformations(
+                        transformations=[
+                            dlp_v2.InfoTypeTransformations.InfoTypeTransformation(
+                                info_types=info_types,
+                                primitive_transformation=dlp_v2.PrimitiveTransformation(
+                                    replace_with_info_type_config=dlp_v2.ReplaceWithInfoTypeConfig()
+                                ),
+                            )
+                        ]
+                    )
+                ),
+                item=dlp_v2.ContentItem(value=req.text),
+            )
         )
-    )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
     elapsed_ms = round((time.time() - start) * 1000)
 
@@ -483,8 +490,8 @@ async def chat_pipeline(req: SanitizeRequest):
             }
 
     # Step 3: Scan the LLM response (skip if no output)
-    llm_text = steps["llm"].get("text") if not steps["llm"].get("skipped") else None
-    if not llm_text:
+    llm_output = steps["llm"].get("text") if not steps["llm"].get("skipped") else None
+    if not llm_output:
         steps["response_scan"] = {"skipped": True, "reason": "No LLM output to scan"}
     else:
         step3_start = time.time()
@@ -492,11 +499,11 @@ async def chat_pipeline(req: SanitizeRequest):
             resp_response = ma_client.sanitize_model_response(
                 request=ma.SanitizeModelResponseRequest(
                     name=TEMPLATE_NAME,
-                    model_response_data=ma.DataItem(text=llm_text),
+                    model_response_data=ma.DataItem(text=llm_output),
                 )
             )
             step3_ms = round((time.time() - step3_start) * 1000)
-            response_scan = parse_sanitization_result(resp_response.sanitization_result, llm_text)
+            response_scan = parse_sanitization_result(resp_response.sanitization_result, llm_output)
             response_scan["elapsed_ms"] = step3_ms
             steps["response_scan"] = response_scan
         except Exception as e:

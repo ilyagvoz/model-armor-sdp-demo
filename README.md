@@ -79,6 +79,7 @@ The app includes pre-built attack scenarios you can trigger with one click:
 | **PII / Sensitive Data** | Australian TFN, Medicare, credit cards, API keys | Blocked by SDP filter |
 | **Malicious URLs** | Known phishing/malware test URLs | Blocked by Malicious URI filter |
 | **Hate Speech** | Content targeting protected groups | Blocked by RAI filter |
+| **De-identification** | Replaces names, emails, TFNs and Medicare numbers with tokens before sending to Gemini | PII transformed (not blocked) |
 | **Safe Prompt (Control)** | Normal productivity question | Passes all filters |
 
 ## Features
@@ -142,6 +143,6 @@ The result (mod 10) must equal the 9th digit. The 10th digit is the Individual R
 
 ---
 
-*Last updated: March 2026*
+*Last updated: April 2026*
 
 Questions or feedback? Reach out to [gvoz@google.com](mailto:gvoz@google.com).

@@ -153,34 +153,22 @@
         </div>
       </div>
       <div class="flex items-center gap-4">
-        <div x-show="llmConfig" class="flex items-center gap-1.5 text-xs font-mono text-gray-500 border border-gray-200 rounded-md px-2.5 py-1.5 bg-white">
-          <i data-lucide="cpu" class="w-3.5 h-3.5 text-safe"></i>
-          <span x-text="llmConfig?.model"></span>
-        </div>
         <div x-show="templateReady && templateRegion" class="flex items-center gap-1.5 text-xs font-mono text-gray-500 border border-gray-200 rounded-md px-2.5 py-1.5 bg-white">
-          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-accent"></i>
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-accent"></i>
+          <span class="text-gray-400">Model Armor + SDP</span>
+          <span class="text-gray-300">·</span>
           <span x-text="templateRegion"></span>
         </div>
-
-        <!-- Sensitivity preset selector -->
-        <div x-show="templateReady" class="flex items-center gap-2">
-          <span class="text-xs font-mono text-gray-400 uppercase tracking-wider">Sensitivity</span>
-          <div class="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-200">
-            <template x-for="preset in [{label:'Low', value:'LOW_AND_ABOVE'}, {label:'Med', value:'MEDIUM_AND_ABOVE'}, {label:'High', value:'HIGH'}]" :key="preset.value">
-              <button
-                @click="applyPreset(preset.value)"
-                :disabled="configApplying"
-                class="px-3 py-1 rounded-md text-xs font-mono font-semibold transition-all disabled:opacity-40"
-                :class="config.pi_confidence === preset.value
-                  ? 'bg-accent text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'"
-                x-text="configApplying && config.pi_confidence === preset.value ? '...' : preset.label"
-              ></button>
-            </template>
-          </div>
+        <div x-show="llmConfig" class="flex items-center gap-1.5 text-xs font-mono text-gray-500 border border-gray-200 rounded-md px-2.5 py-1.5 bg-white">
+          <i data-lucide="cpu" class="w-3.5 h-3.5 text-safe"></i>
+          <span class="text-gray-400">Gemini</span>
+          <span class="text-gray-300">·</span>
+          <span x-text="llmConfig?.model?.replace('gemini-', '')"></span>
+          <span class="text-gray-300">·</span>
+          <span x-text="llmConfig?.region"></span>
         </div>
 
-        <div class="flex items-center gap-2 text-sm font-mono">
+<div class="flex items-center gap-2 text-sm font-mono">
           <span class="w-2 h-2 rounded-full" :class="templateReady ? 'bg-safe' : 'bg-blocked'"></span>
           <span class="text-gray-500" x-text="templateReady ? 'Template Active' : 'Template Not Ready'"></span>
         </div>
@@ -223,6 +211,23 @@
         <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
           <h2 class="text-base font-semibold text-gray-900 font-display">Template Configuration</h2>
           <span class="text-xs font-mono text-gray-400 tracking-wider" x-text="templateName"></span>
+        </div>
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3 bg-gray-50">
+          <span class="text-sm font-mono text-gray-400 uppercase tracking-wider shrink-0">Quick set</span>
+          <div class="flex items-center bg-white rounded-lg p-0.5 border border-gray-200">
+            <template x-for="preset in [{label:'Broad', value:'LOW_AND_ABOVE', hint:'Flags low-confidence matches'}, {label:'Balanced', value:'MEDIUM_AND_ABOVE', hint:'Default — medium confidence required'}, {label:'Precise', value:'HIGH', hint:'High-confidence matches only'}]" :key="preset.value">
+              <button
+                @click="applyPreset(preset.value)"
+                class="px-4 py-1.5 rounded-md text-sm font-mono font-semibold transition-all"
+                :class="config.pi_confidence === preset.value && config.rai_confidence === preset.value
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'"
+                :title="preset.hint"
+                x-text="preset.label"
+              ></button>
+            </template>
+          </div>
+          <span class="text-sm text-gray-400">Sets minimum detection confidence for PI &amp; Jailbreak and RAI — then adjust individually below if needed</span>
         </div>
         <div class="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="space-y-2">
@@ -1199,10 +1204,9 @@
             '<span class="px-1 py-0.5 rounded bg-warn/20 text-warn font-bold">[$1]</span>');
         },
 
-        async applyPreset(confidenceValue) {
+        applyPreset(confidenceValue) {
           this.config.pi_confidence = confidenceValue;
           this.config.rai_confidence = confidenceValue;
-          await this.applyConfig();
         },
 
         async applyConfig() {

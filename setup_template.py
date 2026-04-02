@@ -5,6 +5,7 @@ import sys
 
 from dotenv import load_dotenv
 from google.api_core import exceptions as gcp_exceptions
+from google.cloud import dlp_v2 as dlp
 from google.cloud import modelarmor_v1 as ma
 
 load_dotenv()
@@ -20,9 +21,15 @@ if not PROJECT_ID:
 API_ENDPOINT = f"modelarmor.{REGION}.rep.googleapis.com"
 PARENT = f"projects/{PROJECT_ID}/locations/{REGION}"
 TEMPLATE_NAME = f"{PARENT}/templates/{TEMPLATE_ID}"
-DLP_INSPECT_TEMPLATE = f"{PARENT}/inspectTemplates/model-armor-inspect"
+DLP_INSPECT_TEMPLATE = os.environ.get(
+    "DLP_INSPECT_TEMPLATE",
+    f"{PARENT}/inspectTemplates/model-armor-inspect",
+)
 
 CONFIDENCE = ma.DetectionConfidenceLevel.MEDIUM_AND_ABOVE
+
+# The SDK uses verbose per-class enforcement enums; define a shorthand for readability.
+_ENABLED = 1  # FilterEnforcement.ENABLED
 
 DLP_INFO_TYPES = [
     # Australian PII
@@ -47,8 +54,6 @@ DLP_INFO_TYPES = [
 
 def setup_dlp_template():
     """Create the Sensitive Data Protection inspect template for PII detection."""
-    import google.cloud.dlp_v2 as dlp
-
     client = dlp.DlpServiceClient()
     inspect_config = dlp.InspectConfig(
         info_types=[dlp.InfoType(name=t) for t in DLP_INFO_TYPES],
@@ -71,7 +76,7 @@ def setup_dlp_template():
     except (gcp_exceptions.AlreadyExists, gcp_exceptions.InvalidArgument):
         print(f"DLP inspect template already exists: {DLP_INSPECT_TEMPLATE}")
     except (gcp_exceptions.PermissionDenied, gcp_exceptions.Forbidden) as e:
-        print(f"Failed to create DLP template. Make sure the DLP API is enabled:\n")
+        print("Failed to create DLP template. Make sure the DLP API is enabled:\n")
         print(f"  gcloud services enable dlp.googleapis.com --project={PROJECT_ID}\n")
         print(f"Error: {e}")
         sys.exit(1)
@@ -81,11 +86,11 @@ def build_template() -> ma.Template:
     return ma.Template(
         filter_config=ma.FilterConfig(
             pi_and_jailbreak_filter_settings=ma.PiAndJailbreakFilterSettings(
-                filter_enforcement=1,  # ENABLED
+                filter_enforcement=_ENABLED,
                 confidence_level=CONFIDENCE,
             ),
             malicious_uri_filter_settings=ma.MaliciousUriFilterSettings(
-                filter_enforcement=1,  # ENABLED
+                filter_enforcement=_ENABLED,
             ),
             rai_settings=ma.RaiFilterSettings(
                 rai_filters=[
@@ -142,8 +147,8 @@ def main():
         )
         print(f"Template already exists: {template.name}")
     except (gcp_exceptions.PermissionDenied, gcp_exceptions.Forbidden) as e:
-        print(f"Permission denied. Make sure you have run:\n")
-        print(f"  gcloud auth application-default login")
+        print("Permission denied. Make sure you have run:\n")
+        print("  gcloud auth application-default login")
         print(f"  gcloud services enable modelarmor.googleapis.com --project={PROJECT_ID}\n")
         print(f"Error: {e}")
         sys.exit(1)
@@ -152,13 +157,13 @@ def main():
     print()
     print("Filters enabled:")
     print(f"  PI & Jailbreak:    ENABLED, {ma.DetectionConfidenceLevel(fc.pi_and_jailbreak_filter_settings.confidence_level).name}")
-    print(f"  Malicious URI:     ENABLED")
+    print("  Malicious URI:     ENABLED")
     sdp = fc.sdp_settings
     if sdp.advanced_config and sdp.advanced_config.inspect_template:
-        print(f"  Sensitive Data:    ADVANCED (DLP)")
+        print("  Sensitive Data:    ADVANCED (DLP)")
         print(f"    Inspect template: {sdp.advanced_config.inspect_template}")
     else:
-        print(f"  Sensitive Data:    BASIC")
+        print("  Sensitive Data:    BASIC")
     for rf in fc.rai_settings.rai_filters:
         name = ma.RaiFilterType(rf.filter_type).name
         conf = ma.DetectionConfidenceLevel(rf.confidence_level).name
